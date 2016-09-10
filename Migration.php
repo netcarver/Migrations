@@ -249,6 +249,32 @@ abstract class Migration extends Wire{
 
 
 	/**
+	 * Clones an existing field, giving the clone a new name.
+	 *
+	 * @param Field|string $source_field The field to be cloned
+	 * @param string       $new_name     The name to use for the new field cloned from the source
+	 * @throws WireException
+	 */
+	protected function cloneFieldAndRename($source_field, $new_name)
+	{
+		// Check the new name is valid
+		if (!is_string($new_name)) throw new WireException("New name must be a string");
+		$new_name = $this->sanitizer->fieldName($new_name);
+		if (empty($new_name)) throw new WireException("New name is not a valid field name");
+
+		// Check a field using the new name does not already exist
+		$exists = $this->fields->get($new_name);
+		if ($exists instanceof Field) throw new WireException("A field called $new_name already exists");
+
+		// Check the source field exists
+		$source = $this->getField($source_field);
+		$new_field = $this->fields->clone($source, $new_name);
+		$this->fields->save($new_field);
+		$this->message("Successfully cloned field '{$source->name}' to '{$new_field->name}'");
+	}
+
+
+	/**
 	 * Creates a named snapshot of the database.
 	 * Uses the built-in WireBackup class
 	 *

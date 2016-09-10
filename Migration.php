@@ -205,4 +205,76 @@ abstract class Migration extends Wire{
 		if(!$field instanceof Field) throw new WireException("Invalid field $field");
 		return $field;
 	}
+
+
+	/**
+	 * Creates a named snapshot of the database.
+	 * Uses the built-in WireBackup class
+	 *
+	 * @param string $name The name of the snapshot to create (without path or extension)
+	 * @return bool A value of true means the restore was a success.
+	 * @throws WireException
+	 */
+	protected function makeDatabaseSnapshot($name)
+	{
+		$p = $this->config->paths->assets.'backups/database/';
+
+		// Look for the named db file...
+		$f = "{$p}$name.sql";
+		if (is_readable($f)) {
+			throw new WireException("DB backup file $f already exists - please use it or delete it.");
+		}
+
+		$backup = new WireDatabaseBackup($p);
+		$backup->setDatabase($this->database);
+
+		$options = array(
+			'filename'    => "$name.sql",
+			'description' => "Made as part of migration script.",
+		);
+		$file = $backup->backup($options);
+		if ($file) {
+			$this->message("Created DB snapshot '$name.sql'");
+		} else {
+			$this->error(implode("\n", $backup->errors()));
+			throw new WireException("Could not backup DB.");
+		}
+	}
+
+
+	/**
+	 * Restores the named DB snapshot
+	 * Uses the built-in WireBackup class
+	 *
+	 * @param string $name The name of the snapshot to restore (without path or extension)
+	 * @return bool A value of true means the restore was a success.
+	 * @throws WireException
+	 */
+	protected function restoreDatabaseSnapshot($name)
+	{
+		$p = $this->config->paths->assets.'backups/database/';
+		// Look for the named db file...
+		$f = "{$p}$name.sql";
+		if (!file_exists($f)) {
+			throw new WireException("DB backup file $f not found - can't downgrade.");
+		}
+		if (!is_readable($f)) {
+			throw new WireException("DB backup file $f cannot be read - please change permissions and try again.");
+		}
+
+		$backup = new WireDatabaseBackup($p);
+		$backup->setDatabase($this->database); // optional, if ommitted it will attempt it's own connection
+		$success = $backup->restore("$name.sql");
+		if ($success) {
+			$this->message("Restored DB snapshot '$name.sql'");
+			$this->message(implode("\n", $backup->notes()));
+		} else {
+			$this->error(implode("\n", $backup->errors()));
+			throw new WireException("Could not restore DB.");
+		}
+
+		return $success;
+	}
+
+
 }

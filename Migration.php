@@ -208,6 +208,47 @@ abstract class Migration extends Wire{
 
 
 	/**
+	 * Renames a field
+	 *
+	 * @param Field|string $field
+	 * @param string $new_name
+	 * @throws WireException
+	 */
+	protected function renameField($field, $new_name)
+	{
+		if (!is_string($new_name)) throw new WireException("New name must be a string");
+		$new_name = $this->sanitizer->fieldName($new_name);
+		if (empty($new_name)) throw new WireException("New name is not a valid field name");
+
+		$exists = $this->fields->get($new_name);
+		if ($exists instanceof Field) throw new WireException("A field called $new_name already exists");
+
+		$f = $this->getField($field);
+		$old_name = $f->name;
+		$f->name = $new_name;
+		$f->save();
+		$this->message("Renamed '$old_name' to '$new_name'.");
+	}
+
+
+	/**
+	 * Renames a set of fields
+	 *
+	 * @param array $conversions An array of existing field => new field name mappings.
+	 * @throws WireException
+	 * @example renameFields(['text_2'=>'lead_text', $f=>'about']);
+	 */
+	protected function renameFields(array $conversions)
+	{
+		if (!empty($conversions)) {
+			foreach ($conversions as $from => $to) {
+				$this->renameField($from, $to);
+			}
+		}
+	}
+
+
+	/**
 	 * Creates a named snapshot of the database.
 	 * Uses the built-in WireBackup class
 	 *

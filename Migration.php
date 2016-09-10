@@ -246,6 +246,10 @@ abstract class Migration extends Wire{
 	 * Restores the named DB snapshot
 	 * Uses the built-in WireBackup class
 	 *
+	 * NB: You need to remove any fields you might have added before you restore a DB snapshot. This is needed because
+	 * the snapshot will *not* overwrite the field_yourfieldname table that was created for your field, leaving it
+	 * orphaned in the DB once the fields table from the snapshot is resotred.
+	 *
 	 * @param string $name The name of the snapshot to restore (without path or extension)
 	 * @return bool A value of true means the restore was a success.
 	 * @throws WireException

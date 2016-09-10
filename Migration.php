@@ -249,6 +249,127 @@ abstract class Migration extends Wire{
 
 
 	/**
+	 * Within the given templates, replaces each named source field with its replacement field and copies over data from
+	 * all pages that use the templates.
+	 * It also copies the source fields' template context settings to the replacement.
+	 *
+	 * @param array $templates templates in which to perform the replacement and data copy
+	 * @param array $replacements "source field name" -> "replacement field name" mappings
+	 * @param bool $remove_source_from_template Default: false. When true, causes the source fields to be removed from templates if the data copied over successfully
+	 * @param bool $clone_missing_replacements When true (default) if the replacement field does not yet exist, it will be cloned from the source field.
+	 * @throws WireException
+	 * @example replaceFieldsInTemplates([home, blog], ['t_area_1'=>'lead', 't_area_2'=>'body']);
+	 */
+	protected function replaceFieldsInTemplates(array $templates, array $replacements, $remove_source_from_template=false, $clone_missing_replacements=true)
+	{
+		if (!is_array($templates)) throw new WireException("The \$templates argument must be an array of template names.");
+		if (empty($templates)) {
+			$this->message("No templates specified - all done in " . __METHOD__);
+			return;
+		}
+
+		if (!is_array($replacements)) throw new WireException("The \$templates argument must be an array of template names.");
+		if (empty($replacements)) {
+			$this->message("No replacements specified - all done in " . __METHOD__);
+			return;
+		}
+
+		// Check all the source fields exist and appear in all the templates we are replacing them in...
+		foreach ($replacements as $source_name => &$replacement_name) {
+			$fields_info = $this->fields->getAll();
+			if (empty($replacement_name)) {
+				throw new WireException("Replacement field is empty!");
+			}
+			if (empty($source_name)) {
+				throw new WireException("Source field is empty!");
+			}
+
+			// Sanitize the names...
+			$source_name	  = $this->sanitizer->fieldName($source_name);
+			$replacement_name = $this->sanitizer->fieldName($replacement_name);
+
+			if ($source_name == $replacement_name) {
+				throw new WireException("Source and replacement fields cannot match!");
+			}
+
+			if (!$fields_info->has($source_name)) {
+				throw new WireException("Source field '$source_name' does not exist!");
+			}
+
+			// Clone any missing replacement fields...
+			if ($clone_missing_replacements && !$fields_info->has($replacement_name)) {
+				$this->cloneFieldAndRename($source_name, $replacement_name);
+			}
+		}
+
+
+		// Add replacement field to templates and copy data from source field in pages using the templates
+		foreach ($replacements as $source_name => $replacement_name) {
+			$src	= $this->getField($source_name);
+			$src_id = $src->id;
+
+			try {
+				$dst = $this->getField($replacement_name);
+			} catch (WireException $e) {
+				$this->warning("Skipping $source_name => $replacement_name replacement because field '$replacement_name' does not exist.");
+				continue; // Try next replacement - this one can't complete!
+			}
+
+			$dst_id = $dst->id;
+			$this->message("Source field id [$src_id], replacement field id [$dst_id]");
+			foreach ($templates as $tname) {
+
+				try {
+					// Add the replacement field into the template, just after the source field...
+					$this->insertIntoTemplate($tname, $replacement_name, $source_name);
+				} catch (WireException $e) {
+					$this->warning("Could not insert '$replacement_name' into template '$tname' after field '$source_name' - skipping context and data copy");
+					continue;
+				}
+
+				// Clone the source field's context into the replacement field's context..
+				$fieldgroup	 = $this->getTemplate($tname)->fieldgroup;
+				$src_context	= $fieldgroup->getFieldContextArray($src_id);
+				if (!empty($src_context)) {
+					$fieldgroup->setFieldContextArray($dst_id, $src_context);
+					$fieldgroup->saveContext();
+					$this->message("Cloned '$source_name' to '$replacement_name' context for template '$tname'.");
+				}
+
+				// Do the data copy...
+				$num_copied = $this->copyFieldInPagesUsingTemplates(array($tname), $source_name, $replacement_name);
+
+				if (false == $remove_source_from_template) continue; // No need to remove source field from template
+
+				$match = true;
+				if ($num_copied > 0) {
+					// Check the copy worked. If it did, allow the source field's removal from the template
+					$src_pages = $this->pages->find("template=$tname, $source_name!='', include=all");
+					$dst_pages = $this->pages->find("template=$tname, $replacement_name!='', include=all");
+					if (((string)$src_pages == (string)$dst_pages)) {
+						// The src and dst page ids match - but do the data in the fields?
+						foreach ($src_pages as $p) {
+							if ($p->$source_name != $p->$replacement_name) {
+								$match = false;
+								break;
+							}
+						}
+					}
+				}
+
+				if ($match) {
+					$this->message("Removing '$source_name' from template '$tname' as page data copied ok");
+					$this->removeFromTemplate($tname, $source_name);
+				} else {
+					$this->warning("Could not remove '$source_name' from template '$tname' because some of the page data did not copy correctly.");
+				}
+			}
+		}
+
+	}
+
+
+	/**
 	 * For every page using any of the given templates, copy the value from the source field to the dest field.
 	 *
 	 * @param array $templates     The names of the templates to use to find pages in which the data copy will take place

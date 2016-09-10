@@ -249,6 +249,33 @@ abstract class Migration extends Wire{
 
 
 	/**
+	 * For every page using any of the given templates, copy the value from the source field to the dest field.
+	 *
+	 * @param array $templates     The names of the templates to use to find pages in which the data copy will take place
+	 * @param string|Field $source The field to copy values from
+	 * @param string|Field $dest   The field to copy values to
+	 * @param bool $quiet          Should the page's modified date/user be changed? true (default) -> no, false -> yes.
+	 * @return integer             Number of pages updated
+	 * @throws WireException
+	 */
+	protected function copyFieldInPagesUsingTemplates(array $templates, $source, $dest, $quiet = true)
+	{
+		$s = $this->getField($source);
+		$sourcename = $s->name; // Now a string
+		$d = $this->getField($dest);
+		$destname = $d->name;
+		$selector = "template='".implode('|', $templates)."', include=all";
+		$num = $this->eachPageUncache($selector, function ($p) use ($sourcename, $destname, $quiet) {
+			$p->of(false);
+			$p->$destname = $p->$sourcename;
+			$p->save(array('quiet' => $quiet));
+		});
+		$this->message("Copied '$sourcename' to '$destname' in $num pages using selector [$selector]");
+		return $num;
+	}
+
+
+	/**
 	 * Clones an existing field, giving the clone a new name.
 	 *
 	 * @param Field|string $source_field The field to be cloned

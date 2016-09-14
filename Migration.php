@@ -180,6 +180,13 @@ abstract class Migration extends Wire{
 		$fields_info = $this->fields->getAll();
 		foreach ($candidates as $candidate) {
 			$sanitised = $this->sanitizer->fieldName($candidate);
+
+			if (empty($candidate)) {
+				$rejects[$candidate] = $candidate;
+				if (!$quiet) $this->warning("Candidate fieldname cannot be empty.");
+				continue;
+			}
+
 			if ($sanitised !== $candidate) {
 				$rejects[$candidate] = $sanitised;
 				if (!$quiet) $this->warning("Candidate fieldname '$candidate' sanitized to '$sanitised'");

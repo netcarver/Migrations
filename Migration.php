@@ -163,6 +163,47 @@ abstract class Migration extends Wire{
 
 
 	/**
+	 * Checks if the strings in the given array are valid, unused, field names.
+	 *
+	 * The check will fail for a candidate fieldname if it changes when sanitised as a fieldname or if the name is
+	 * already in use as a field.
+	 *
+	 * @param array $candidates Strings to check for validity as field names
+	 * @param bool  $quiet Should warnings of failures be surpressed? default: true
+	 * @return array $rejects Array of candidate => sanitised candidate names.
+	 *
+	 * Use 'array_key_exists()' when checking return values.
+	 */
+	protected function verifyCandidateFieldNames(array $candidates, $quiet = true)
+	{
+		$rejects = array();
+		$fields_info = $this->fields->getAll();
+		foreach ($candidates as $candidate) {
+			$sanitised = $this->sanitizer->fieldName($candidate);
+			if ($sanitised !== $candidate) {
+				$rejects[$candidate] = $sanitised;
+				if (!$quiet) $this->warning("Candidate fieldname '$candidate' sanitized to '$sanitised'");
+				continue;
+			}
+
+			if ($fields_info->has($candidate)) {
+				$rejects[$candidate] = $sanitised;
+				if (!$quiet) $this->warning("Candidate fieldname '$candidate' already in use.");
+				continue;
+			}
+
+			if ($this->fields->isNative($candidate)) {
+				$rejects[$candidate] = $sanitised;
+				if (!$quiet) $this->warning("Candidate fieldname '$candidate' is a native (system) field name.");
+			}
+		}
+
+		if (!empty($rejects) && !$quiet) throw new WireException("Error in candidate fieldnames, please correct.");
+		return $rejects;
+	}
+
+
+	/**
 	 * Edit a field in template context
 	 *
 	 * @param Template|string $template

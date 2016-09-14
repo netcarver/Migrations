@@ -147,6 +147,7 @@ abstract class Migration extends Wire{
 	 * Conditionally deletes a field IFF it is not in use in any templates
 	 *
 	 * @param Field|string $field The field to be deleted
+	 * @return bool true => deleted, false => could not delete.
 	 * @throws WireException
 	 */
 	protected function deleteFieldIfUnused($field)
@@ -156,8 +157,10 @@ abstract class Migration extends Wire{
 		if (0 == $t->count()) {
 			$this->fields->delete($f);
 			$this->message("Deleted field '{$f->name}'");
+			return true;
 		} else {
 			$this->warning("Field '{$f->name}' is still present in templates [$t]");
+			return false;
 		}
 	}
 
